@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Smart Refill — Schleswig-Holstein (Mehrere Städte)</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    :root{
+      --bg: #131313;
+      --panel: #17181b;
+      --muted: #48ffe8;
+      --accent-1: #085862;
+      --accent-2: #48ffe8;
+      --accent-3: #085862;
+      --glass: rgba(255, 255, 255, 0.068);
+      --card-shadow: 0 10px 30px #1c5c53;
+      --text: #eaf8ea;
+      --radius: 12px;
+    }
+
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(180deg, var(--bg), #0b0c0d 140%);
+      color:var(--text);
+      -webkit-font-smoothing:antialiased;
+      display:flex;
+      min-height:100vh;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    .sidebar{
+      width:380px;
+      min-width:300px;
+      max-width:460px;
+      background: linear-gradient(180deg, rgb(24, 24, 24), rgb(24, 24, 24));
+      border-right:1px solid rgba(24, 24, 24);
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      overflow:auto;
+    }
+
+    .main{flex:1;display:flex;flex-direction:column;min-width:0}
+    header.appbar{
+      height:70px; display:flex; align-items:center; gap:12px; padding:12px 18px;
+      border-bottom:1px solid rgba(255,255,255,0.02); background:linear-gradient(180deg, rgb(0,0,0,0.03), transparent);
+      z-index:10; flex-shrink:0;
+    }
+
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--accent-1),var(--accent-3));color:#081006;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px #207368}
+    .title{font-size:1.05rem;font-weight:700}
+    .subtitle{font-size:0.86rem;color:var(--muted)}
+
+    .searchbox{display:flex;gap:8px;align-items:center}
+    .searchbox input{flex:1;padding:10px 12px;border-radius:10px;background:var(--glass);border:1px solid rgba(255,255,255,0.03);color:var(--text);outline:none}
+    .searchbox button{padding:9px 12px;border-radius:10px;border:none;background:var(--accent-2);color:#081006;font-weight:700;cursor:pointer}
+
+    .stations{display:flex;flex-direction:column;gap:10px}
+    .station-card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent);
+      border:1px solid rgba(255,255,255,0.03);
+      padding:12px;border-radius:12px;box-shadow:var(--card-shadow);
+      display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+    }
+    .station-meta h4{margin:0;font-size:1rem}
+    .station-meta p{margin:6px 0 0;font-size:0.86rem;color:var(--muted)}
+    .station-actions{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+    .pill{padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.02);font-size:0.82rem;color:var(--muted)}
+
+    .btn-small{padding:8px 10px;border-radius:8px;border:none;background:var(--accent-2);color:#081006;font-weight:700;cursor:pointer}
+    .btn-outline{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--muted);cursor:pointer}
+
+    .station-detail{margin-top:8px;padding:12px;border-radius:12px;background:var(--glass);border:1px solid rgba(255,255,255,0.02)}
+    .drink-list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+    .drink-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;background:rgba(255,255,255,0.01);border:1px solid rgba(255,255,255,0.02)}
+    .drink-name{font-weight:700}
+    .drink-meta{font-size:0.86rem;color:var(--muted)}
+    .controls{display:flex;gap:8px;align-items:center}
+    .volume-select{display:flex;gap:6px}
+    .volume-select button{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--muted);cursor:pointer}
+    .volume-select button.active{background:linear-gradient(90deg,var(--accent-1),var(--accent-3));color:#081006;border:none}
+
+    #map{flex:1;min-height:0}
+    .map-toggle{position:absolute;top:84px;right:22px;z-index:1000;display:flex;gap:8px;align-items:center;background:linear-gradient(180deg, rgba(6,6,6,0.6), rgba(6,6,6,0.45));border:1px solid rgba(255,255,255,0.04);padding:8px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.5);backdrop-filter:blur(6px)}
+    .toggle-btn{padding:8px 12px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer}
+    .toggle-btn.active{background:linear-gradient(90deg,var(--accent-1),var(--accent-2));color:#081006;font-weight:800}
+
+    .leaflet-popup-content-wrapper{background:#f7fff7;border-radius:8px;color:#0a1a0a}
+    .leaflet-popup-tip{background:#f7fff7}
+
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:2000}
+    .modal{width:760px;max-width:96%;background:linear-gradient(180deg,#0f1113,#0b0c0e);padding:18px;border-radius:14px;border:1px solid rgba(255,255,255,0.03);box-shadow:var(--card-shadow);color:var(--text)}
+    .field{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+    input[type=text], input[type=number], textarea{padding:10px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.03);color:var(--text)}
+
+    @media (max-width: 900px){
+  body{
+    flex-direction: row;
+  }
+
+  .sidebar{
+    width:300px;
+    min-width:260px;
+  }
+
+  .main{
+    margin-left:0;
+  }
+}
+
+
+    @media (max-width: 700px){
+  body{
+    flex-direction: column;
+  }
+
+  .sidebar{
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    height: 42vh;
+    width: 100%;
+    max-width: none;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    z-index: 1000;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .main{
+    flex: 1;
+  }
+}
+
+
+    #map{
+  flex: 1;
+  min-height: 0;
+    }
+
+    @media (max-width: 700px){
+    #map{
+    height: calc(100vh - 70px);
+    }
+    }
+
+    @media (max-width: 700px){
+  header.appbar{
+    height: auto;
+    padding: 10px 14px;
+  }
+
+  footer{
+    height: auto;
+    padding: 10px 14px;
+    font-size: 0.75rem;
+  }
+}
+
+    @media (max-width: 700px){
+  .station-card{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .station-actions{
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 700px){
+  button{
+    min-height: 44px;
+    font-size: 0.95rem;
+  }
+
+  .btn-small,
+  .btn-outline{
+    padding: 10px 14px;
+  }
+}
+
+@media (max-width: 700px){
+  .map-toggle{
+    top: 12px;
+    right: 12px;
+    left: auto;
+    padding: 6px;
+  }
+
+  .toggle-btn{
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+}
+
+
+    .muted{color:var(--muted)}
+    .tiny{font-size:0.82rem}
+    .gap{height:10px}
+  </style>
+</head>
+<body>
+  <aside class="sidebar" aria-label="Seitenleiste">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="logo">SR</div>
+        <div>
+          <div class="title">Smart Refill — SH & Hamburg</div>
+          <div class="subtitle">Automaten verteilt in Schleswig-Holstein</div>
+        </div>
+      </div>
+      <div><button id="btn-admin" class="btn-small" title="Admin">Admin</button></div>
+    </div>
+
+    <div class="gap"></div>
+
+    <div class="searchbox" role="search">
+      <input id="search" placeholder="Suche Station / Stadt / Getränk..." aria-label="Suche" />
+      <button id="clear-search">Löschen</button>
+    </div>
+
+    <div class="gap"></div>
+
+    <div id="station-list" class="stations" aria-live="polite"></div>
+
+    <div class="gap"></div>
+
+    <div class="station-detail" id="station-detail" hidden>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <h3 id="detail-name">Station</h3>
+          <div class="muted tiny" id="detail-loc">Adresse</div>
+        </div>
+        <div id="detail-online" class="pill">Online</div>
+      </div>
+
+      <div class="drink-list" id="detail-drinks"></div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+        <div class="volume-select" role="radiogroup" aria-label="Menge wählen">
+          <button data-volume="0.5" class="active">0.5 L</button>
+          <button data-volume="0.75">0.75 L</button>
+          <button data-volume="1">1 L</button>
+          <button data-volume="1.5">1.5 L</button>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button id="btn-refill" class="btn-small">Auffüllen & Bezahlen</button>
+          <button id="btn-fav" class="btn-outline">❤ Favorit</button>
+        </div>
+      </div>
+
+      <div class="gap"></div>
+      <div id="detail-message" class="tiny muted"></div>
+    </div>
+
+    <div style="margin-top:8px">
+      <h4 class="tiny">Favoriten</h4>
+      <div id="fav-list" class="tiny muted">(keine Favoriten)</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="appbar">
+      <div class="brand">
+        <div style="display:flex;flex-direction:column">
+          <div class="title">Smart Refill Map</div>
+          <div class="subtitle">Mehrere Städte — Anzahl Stationen abhängig von Stadtgröße</div>
+        </div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:12px;align-items:center">
+        <div class="tiny muted">Benutzer: <strong id="user-name">Gast</strong></div>
+      </div>
+    </header>
+
+    <div id="map" style="position:relative;"></div>
+
+    <div class="map-toggle" role="tablist" aria-label="Kartenansicht umschalten">
+      <button id="btn-dark" class="toggle-btn active" role="tab" aria-selected="true">🗺️ Dark Map</button>
+      <button id="btn-sat" class="toggle-btn" role="tab" aria-selected="false">🛰️ Satellite</button>
+    </div>
+
+    <footer style="height:64px;display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-top:1px solid rgba(255,255,255,0.02);">
+      <div class="muted tiny">© Smart Refill — Demo · Schleswig-Holstein</div>
+      <div class="tiny muted">Reduce • Refill • Repeat</div>
+    </footer>
+  </main>
+
+  <div id="modal-root"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    /************************************************************************
+     * Smart Refill — Multi-City Generator
+     * - Generates variable number of stations per city based on population
+     * - Adds markers for all stations across Schleswig-Holstein + Hamburg
+     * - Map toggle: Dark <-> Satellite (tiles only)
+     * - All features from previous version preserved
+     ************************************************************************/
+
+    // CENTER the map on Schleswig-Holstein region (so all cities show)
+    const CENTER = [54.10, 9.50];
+    const ZOOM = 9;
+
+    const LS_STATIONS = 'sr_sh_stations_v1';
+    const LS_FAVS = 'sr_sh_favs_v1';
+    const VOLUMES = [0.5, 0.75, 1, 1.5];
+
+    // list of cities in Schleswig-Holstein + Hamburg
+    // each entry: { id, name, coords: [lat,lon], population }
+    // population is used to decide number of stations
+    const CITIES = [
+      { id:'hamburg', name:'Hamburg', coords:[53.5511, 9.9937], population: 1800000 },
+      { id:'kiel', name:'Kiel', coords:[54.3233,10.1228], population: 247000 },
+      { id:'lübeck', name:'Lübeck', coords:[53.8655,10.6866], population: 217000 },
+      { id:'flensburg', name:'Flensburg', coords:[54.7930,9.4469], population: 90000 },
+      { id:'neumuenster', name:'Neumünster', coords:[54.073,9.984], population: 79000 },
+      { id:'elmshorn', name:'Elmshorn', coords:[53.7537,9.6570], population: 51000 },
+      { id:'itzehoe', name:'Itzehoe', coords:[53.9208,9.5166], population: 32000 },
+      { id:'husum', name:'Husum', coords:[54.4866,9.0555], population: 23000 },
+      { id:'rendsburg', name:'Rendsburg', coords:[54.3067,9.6661], population: 28000 },
+      { id:'schleswig', name:'Schleswig', coords:[54.5201,9.5662], population: 24000 },
+      { id:'heide', name:'Heide', coords:[54.1996,9.0776], population: 20000 },
+      { id:'neustadt', name:'Bad Segeberg', coords:[53.9360,10.3179], population: 16000 },
+      { id:'wartau', name:'Bargteheide', coords:[53.7345,10.2478], population: 16000 }
+      // you can extend this list easily
+    ];
+
+    // menu of drinks to randomly assign
+    const DRINK_MENU = [
+      { id:'cola', name:'Cola Classic', pricePerL: 1.20 },
+      { id:'cola_zero', name:'Cola Zero', pricePerL: 1.20 },
+      { id:'eistee', name:'Eistee Zitrone', pricePerL: 1.50 },
+      { id:'eistee_pf', name:'Eistee Pfirsich', pricePerL: 1.50 },
+      { id:'limo_z', name:'Limonade Zitrus', pricePerL: 1.40 },
+      { id:'ginger', name:'Sprite', pricePerL: 1.30 },
+      { id:'mineral', name:'Mineral Spritz', pricePerL: 1.20 },
+      { id:'rhabarber', name:'Rhabarber Spritz', pricePerL: 1.20 }
+    ];
+
+    // helper functions
+    function fmtEuro(n){ return '€' + Number(n).toFixed(2); }
+    function rnd(min,max){ return Math.random()*(max-min)+min; }
+    function rndInt(min,max){ return Math.floor(rnd(min,max+1)); }
+    function clone(o){ return JSON.parse(JSON.stringify(o)); }
+    function escapeHtml(s){ if(s===null||s===undefined) return ''; return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+
+    // decide number of stations per city using population buckets
+    // simple rule: 1 station per 25k people, but with min/max caps:
+    function stationsForPopulation(pop){
+      const per = Math.round(pop / 25000);
+      return Math.max(1, Math.min(per, 20)); // ensure at least 1, at most 20
+    }
+
+    // generate station id
+    function stationId(cityId, idx){ return cityId + '-' + String(idx).padStart(2,'0'); }
+
+    // generate stations programmatically around cities
+    function generateStationsFromCities(){
+      const list = [];
+      CITIES.forEach(city=>{
+        const count = stationsForPopulation(city.population);
+        for(let i=0;i<count;i++){
+          // scatter around city center (random small offset)
+          const lat = city.coords[0] + rnd(-0.03,0.03);
+          const lon = city.coords[1] + rnd(-0.03,0.03);
+          // pick 3 unique drinks from menu
+          const picks = [];
+          while(picks.length < 3){
+            const d = DRINK_MENU[rndInt(0, DRINK_MENU.length-1)];
+            if(!picks.find(p=>p.id===d.id)) picks.push(d);
+          }
+          // map picks into drink objects with stock & ids
+          const drinks = picks.map((p,ii) => ({
+            id: `${p.id}-${city.id}-${i}-${ii}`,
+            name: p.name,
+            pricePerL: p.pricePerL,
+            stockL: +(rndInt(6,40) + rnd(0,0.95)).toFixed(2) // random stock between ~6 and ~40 L
+          }));
+          const s = {
+            id: stationId(city.id, i+1),
+            name: `${city.name} Refill ${i+1}`,
+            city: city.name,
+            coords: [parseFloat(lat.toFixed(6)), parseFloat(lon.toFixed(6))],
+            address: `${city.name} - Standort ${i+1}`,
+            drinks,
+            online: Math.random() > 0.02 // mostly online
+          };
+          list.push(s);
+        }
+      });
+      return list;
+    }
+
+    // load / save stations to localStorage. If none found, generate programmatically.
+    const LS_KEY = LS_STATIONS;
+    function loadStations(){
+      try{
+        const raw = localStorage.getItem(LS_KEY);
+        if(raw) return JSON.parse(raw);
+      }catch(e){ console.warn('loadStations', e); }
+      const generated = generateStationsFromCities();
+      localStorage.setItem(LS_KEY, JSON.stringify(generated));
+      return generated;
+    }
+    function saveStations(stations){ try{ localStorage.setItem(LS_KEY, JSON.stringify(stations)); }catch(e){ console.warn(e); } }
+
+    // favorites persistence
+    const LS_FAV = LS_FAVS;
+    function loadFavs(){ try{ const r = localStorage.getItem(LS_FAV); return r?JSON.parse(r):[]; }catch(e){return[];} }
+    function saveFavs(favs){ try{ localStorage.setItem(LS_FAV, JSON.stringify(favs)); }catch(e){console.warn(e);} }
+
+    // app state
+    let stations = loadStations();
+    let favs = loadFavs();
+    let selectedStation = null;
+    let selectedDrink = null;
+    let selectedVolume = VOLUMES[0];
+
+    // map & layers
+    let map, darkLayer, satelliteLayer, currentBase = 'dark';
+    const markers = {};
+
+    // DOM refs
+    const stationListEl = document.getElementById('station-list');
+    const detailPanel = document.getElementById('station-detail');
+    const detailName = document.getElementById('detail-name');
+    const detailLoc = document.getElementById('detail-loc');
+    const detailDrinks = document.getElementById('detail-drinks');
+    const detailMessage = document.getElementById('detail-message');
+    const favListEl = document.getElementById('fav-list');
+
+    // tile layers
+    function createTileLayers(){
+      darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png', {
+        maxZoom: 19,
+        attribution: '&copy; CartoDB, OpenStreetMap'
+      });
+      satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        attribution: 'Tiles &copy; Esri'
+      });
+    }
+
+    // init map
+    function initMap(){
+      map = L.map('map', { zoomControl:true, preferCanvas:true }).setView(CENTER, ZOOM);
+      createTileLayers();
+      darkLayer.addTo(map); currentBase = 'dark';
+      // add all markers
+      stations.forEach(s => addMarker(s));
+      map.on('popupopen', (e)=>{ // ensure popup button wiring
+        const btn = e.popup.getElement().querySelector('.popup-open');
+        if(btn){
+          btn.addEventListener('click', ()=>{ const id = btn.getAttribute('data-id'); if(id){ selectStationById(id); centerToStation(id); } });
+        }
+      });
+    }
+
+    function makeMarkerIcon(text){
+      const html = `<div style="
+        background:linear-gradient(180deg,var(--accent-2),var(--accent-3));
+        padding:8px 10px;border-radius:10px;color:#081006;font-weight:800;
+        box-shadow:0 6px 20px rgba(46,98,46,0.2);font-size:12px">${escapeHtml(text)}</div>`;
+      return L.divIcon({ html, className:'sr-marker', iconSize:[36,36], iconAnchor:[18,36] });
+    }
+
+    function buildPopupContent(s){
+      const drinksHtml = s.drinks.map(d => `<div style="margin-top:6px"><strong>${escapeHtml(d.name)}</strong> · ${d.stockL.toFixed(2)} L · ${fmtEuro(d.pricePerL)}/L</div>`).join('');
+      return `<div style="color:#081006;font-weight:700">${escapeHtml(s.name)}</div>
+              <div class="tiny muted" style="margin-top:4px">${escapeHtml(s.address||'')}</div>
+              ${drinksHtml}
+              <div style="margin-top:8px"><button class="popup-open" data-id="${s.id}" style="padding:6px 8px;border-radius:8px;border:none;background:var(--accent-2);color:#081006;font-weight:700;cursor:pointer">Zur Station</button></div>`;
+    }
+
+    function addMarker(s){
+      const m = L.marker(s.coords, { icon: makeMarkerIcon('SR') }).addTo(map);
+      m.bindPopup(buildPopupContent(s), { minWidth:220 });
+      markers[s.id] = m;
+    }
+
+    function updateMarker(s){
+      const m = markers[s.id];
+      if(m) m.setPopupContent(buildPopupContent(s));
+    }
+
+    // UI renderers
+    function renderStationList(filter=''){
+      stationListEl.innerHTML = '';
+      const q = (filter||'').toLowerCase();
+      const filtered = stations.filter(s => {
+        if(!q) return true;
+        if(s.name.toLowerCase().includes(q)) return true;
+        if(s.city && s.city.toLowerCase().includes(q)) return true;
+        if(s.address && s.address.toLowerCase().includes(q)) return true;
+        if(s.drinks.some(d => d.name.toLowerCase().includes(q))) return true;
+        return false;
+      });
+
+      // show grouped by city header (optional)
+      const grouped = {};
+      filtered.forEach(s => { grouped[s.city] = grouped[s.city] || []; grouped[s.city].push(s); });
+
+      Object.keys(grouped).sort().forEach(city=>{
+        const header = document.createElement('div'); header.innerHTML = `<div style="margin:6px 0 4px;font-weight:700">${escapeHtml(city)}</div>`; stationListEl.appendChild(header);
+        grouped[city].forEach(s=>{
+          const card = document.createElement('div'); card.className='station-card'; card.tabIndex=0;
+          card.innerHTML = `
+            <div class="station-meta">
+              <h4>${escapeHtml(s.name)}</h4>
+              <p class="muted tiny">${escapeHtml(s.address||'')}</p>
+              <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${s.drinks.map(d=>`<div class="pill">${escapeHtml(d.name)}</div>`).join('')}</div>
+            </div>
+            <div class="station-actions">
+              <div class="tiny muted">${s.online ? 'Online' : 'Offline'}</div>
+              <button class="btn-small" data-id="${s.id}">Zur Station</button>
+              <button class="btn-outline fav-btn" data-id="${s.id}">${favs.includes(s.id)?'♥':'♡'}</button>
+            </div>
+          `;
+          card.querySelector('.btn-small').addEventListener('click', (ev)=>{ ev.stopPropagation(); selectStationById(s.id); centerToStation(s.id); });
+          card.querySelector('.fav-btn').addEventListener('click',(ev)=>{ ev.stopPropagation(); toggleFav(s.id); });
+          card.addEventListener('keydown', (e)=>{ if(e.key==='Enter') card.querySelector('.btn-small').click(); });
+          stationListEl.appendChild(card);
+        });
+      });
+    }
+
+    function renderFavorites(){
+      if(!favs.length){ favListEl.innerText='(keine Favoriten)'; return; }
+      favListEl.innerHTML = favs.map(id=>{
+        const s = stations.find(x=>x.id===id); if(!s) return '';
+        return `<div>${escapeHtml(s.name)} <small class="muted">· ${escapeHtml(s.city||'')}</small></div>`;
+      }).join('');
+    }
+
+    function renderDetailPanel(){
+      if(!selectedStation){ detailPanel.hidden = true; return; }
+      detailPanel.hidden = false;
+      detailName.innerText = selectedStation.name;
+      detailLoc.innerText = selectedStation.address || (selectedStation.city || '');
+      document.getElementById('detail-online').innerText = selectedStation.online ? 'Online' : 'Offline';
+      detailDrinks.innerHTML = '';
+      selectedStation.drinks.forEach(d=>{
+        const el = document.createElement('div'); el.className='drink-item';
+        el.innerHTML = `
+          <div>
+            <div class="drink-name">${escapeHtml(d.name)}</div>
+            <div class="drink-meta">Bestand: ${d.stockL.toFixed(2)} L · ${fmtEuro(d.pricePerL)}/L</div>
+          </div>
+          <div class="controls">
+            <div class="tiny muted">${fmtEuro(d.pricePerL * selectedVolume)}</div>
+            <button class="btn-outline choose-drink" data-drink="${d.id}">Wählen</button>
+          </div>
+        `;
+        el.querySelector('.choose-drink').addEventListener('click', ()=>{ selectedDrink = d; highlightSelectedDrink(); detailMessage.innerText = `Gewählt: ${d.name}`; });
+        detailDrinks.appendChild(el);
+      });
+      highlightVolumeButtons(); highlightSelectedDrink();
+    }
+
+    function highlightSelectedDrink(){
+      detailDrinks.querySelectorAll('.drink-item').forEach(div=>{
+        const btn = div.querySelector('.choose-drink'); if(!btn) return;
+        const id = btn.getAttribute('data-drink');
+        if(selectedDrink && id === selectedDrink.id) div.style.border = '2px solid var(--accent-2)'; else div.style.border = 'none';
+      });
+    }
+
+    function highlightVolumeButtons(){
+      document.querySelectorAll('.volume-select button').forEach(b=>{
+        const v = parseFloat(b.dataset.volume);
+        if(v === selectedVolume) b.classList.add('active'); else b.classList.remove('active');
+      });
+    }
+
+    // actions
+    function selectStationById(id){
+      const s = stations.find(x=>x.id===id); if(!s) return;
+      selectedStation = s; selectedDrink = null; selectedVolume = VOLUMES[0]; renderDetailPanel();
+    }
+
+    function centerToStation(id){
+      const s = stations.find(x=>x.id===id); if(!s) return;
+      map.setView(s.coords, 14.5, { animate:true });
+      const m = markers[id]; if(m) m.openPopup();
+    }
+
+    function toggleFav(id){
+      const idx = favs.indexOf(id);
+      if(idx === -1) favs.push(id); else favs.splice(idx,1);
+      saveFavs(favs); renderFavorites(); renderStationList(document.getElementById('search').value);
+    }
+
+    function performRefill(){
+      if(!selectedStation || !selectedDrink){ detailMessage.innerText = 'Bitte Station und Getränk wählen.'; return; }
+      if(selectedDrink.stockL < selectedVolume){ detailMessage.innerText = 'Nicht genug Bestand im Automaten.'; return; }
+      const price = +(selectedDrink.pricePerL * selectedVolume).toFixed(2);
+      detailMessage.innerText = `Zahle ${fmtEuro(price)} ...`;
+      setTimeout(()=>{
+        const ok = Math.random() > 0.03;
+        if(ok){
+          const s = stations.find(x=>x.id===selectedStation.id);
+          const d = s.drinks.find(dd=>dd.id===selectedDrink.id);
+          d.stockL = Math.max(0, +(d.stockL - selectedVolume).toFixed(2));
+          saveStations(stations);
+          updateMarker(s);
+          renderStationList(document.getElementById('search').value);
+          renderDetailPanel();
+          detailMessage.innerText = `Auffüllung erfolgreich: ${selectedVolume} L ${selectedDrink.name} — ${fmtEuro(price)}. Danke!`;
+        } else {
+          detailMessage.innerText = 'Zahlung fehlgeschlagen. Bitte erneut versuchen.';
+        }
+      }, 700 + Math.random()*900);
+    }
+
+    // admin modal (simple)
+    function openAdminModal(){
+      const root = document.getElementById('modal-root'); root.innerHTML = '';
+      const wrap = document.createElement('div'); wrap.className='modal-backdrop';
+      const modal = document.createElement('div'); modal.className='modal';
+      modal.innerHTML = `
+        <h3>Station hinzufügen</h3>
+        <div style="display:flex;gap:12px;margin-top:12px">
+          <div style="flex:1">
+            <div class="field"><label>Station ID</label><input id="adm-id" type="text" placeholder="z.B. hamburg-01"></div>
+            <div class="field"><label>Name</label><input id="adm-name" type="text" placeholder="Name der Station"></div>
+            <div class="field"><label>Stadt</label><input id="adm-city" type="text" placeholder="z.B. Kiel"></div>
+            <div class="field"><label>Adresse</label><input id="adm-address" type="text" placeholder="Adresse"></div>
+            <div style="display:flex;gap:6px"><div style="flex:1" class="field"><label>Latitude</label><input id="adm-lat" type="number" step="0.00001"></div><div style="flex:1" class="field"><label>Longitude</label><input id="adm-lon" type="number" step="0.00001"></div></div>
+          </div>
+          <div style="flex:1">
+            <div class="field"><label>Getränke (JSON Array)</label><textarea id="adm-drinks" rows="10">[{ "id":"d-x1","name":"Neue Limo","pricePerL":2.0,"stockL":15 }]</textarea></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+          <button id="adm-save" class="btn-small">Speichern</button>
+          <button id="adm-cancel" class="btn-outline">Abbrechen</button>
+        </div>
+      `;
+      wrap.appendChild(modal); root.appendChild(wrap);
+      modal.querySelector('#adm-cancel').addEventListener('click', ()=>{ root.innerHTML=''; });
+      modal.querySelector('#adm-save').addEventListener('click', ()=>{
+        const id = modal.querySelector('#adm-id').value.trim();
+        const name = modal.querySelector('#adm-name').value.trim();
+        const city = modal.querySelector('#adm-city').value.trim();
+        const address = modal.querySelector('#adm-address').value.trim();
+        const lat = parseFloat(modal.querySelector('#adm-lat').value);
+        const lon = parseFloat(modal.querySelector('#adm-lon').value);
+        let drinks;
+        try{ drinks = JSON.parse(modal.querySelector('#adm-drinks').value); }catch(e){ alert('Getränke JSON ungültig'); return; }
+        if(!id || !name || Number.isNaN(lat) || Number.isNaN(lon)){ alert('Bitte ID, Name, Latitude und Longitude ausfüllen.'); return; }
+        const existing = stations.find(s=>s.id === id);
+        if(existing){
+          existing.name = name; existing.city = city; existing.address = address; existing.coords = [lat,lon]; existing.drinks = drinks; existing.online = true;
+          saveStations(stations); updateMarker(existing); renderStationList(document.getElementById('search').value);
+          root.innerHTML = '';
+        } else {
+          const s = { id, name, city, address, coords:[lat,lon], drinks, online:true };
+          stations.push(s); saveStations(stations); addMarker(s); renderStationList(document.getElementById('search').value);
+          root.innerHTML = '';
+        }
+      });
+    }
+
+    // map toggle handlers
+    function setMapToDark(){
+      if(currentBase === 'dark') return;
+      if(satelliteLayer) map.removeLayer(satelliteLayer);
+      darkLayer.addTo(map); currentBase = 'dark'; updateToggleUi();
+    }
+    function setMapToSat(){
+      if(currentBase === 'sat') return;
+      if(darkLayer) map.removeLayer(darkLayer);
+      satelliteLayer.addTo(map); currentBase = 'sat'; updateToggleUi();
+    }
+    function updateToggleUi(){
+      document.getElementById('btn-dark').classList.toggle('active', currentBase === 'dark');
+      document.getElementById('btn-sat').classList.toggle('active', currentBase === 'sat');
+      document.getElementById('btn-dark').setAttribute('aria-selected', currentBase === 'dark');
+      document.getElementById('btn-sat').setAttribute('aria-selected', currentBase === 'sat');
+    }
+
+    // background stock simulation
+    function startBackgroundSimulation(){
+      setInterval(()=>{
+        if(Math.random() > 0.5) return;
+        const s = stations[rndInt(0, stations.length-1)];
+        const d = s.drinks[rndInt(0, s.drinks.length-1)];
+        const change = +(rnd(0.1, 0.8)).toFixed(2);
+        d.stockL = Math.max(0, +(d.stockL - change).toFixed(2));
+        saveStations(stations);
+        updateMarker(s);
+        if(selectedStation && selectedStation.id === s.id) renderDetailPanel();
+      }, 6000);
+    }
+
+    // wiring UI and boot
+    function wireUi(){
+      document.getElementById('search').addEventListener('input', (e)=> renderStationList(e.target.value));
+      document.getElementById('clear-search').addEventListener('click', ()=>{ document.getElementById('search').value=''; renderStationList(''); });
+      document.getElementById('btn-admin').addEventListener('click', openAdminModal);
+      document.querySelectorAll('.volume-select button').forEach(b=>{
+        b.addEventListener('click', ()=>{
+          selectedVolume = parseFloat(b.dataset.volume); highlightVolumeButtons(); renderDetailPanel();
+        });
+      });
+      document.getElementById('btn-refill').addEventListener('click', performRefill);
+      document.getElementById('btn-fav').addEventListener('click', ()=>{ if(!selectedStation){ detailMessage.innerText='Wähle zuerst eine Station.'; return; } toggleFav(selectedStation.id); });
+      document.getElementById('btn-dark').addEventListener('click', setMapToDark);
+      document.getElementById('btn-sat').addEventListener('click', setMapToSat);
+    }
+
+    // helper to add marker when admin adds a new station
+    function addMarker(s){
+      const m = L.marker(s.coords, { icon: makeMarkerIcon('SR') }).addTo(map);
+      m.bindPopup(buildPopupContent(s), { minWidth:220 });
+      markers[s.id] = m;
+    }
+
+    // local helper reused
+    function makeMarkerIcon(text){
+      const html = `<div style="
+        background:linear-gradient(180deg,var(--accent-2),var(--accent-3));
+        padding:8px 10px;border-radius:10px;color:#081006;font-weight:800;
+        box-shadow:0 6px 20px rgba(46,98,46,0.2);font-size:12px">${escapeHtml(text)}</div>`;
+      return L.divIcon({ html, className:'sr-marker', iconSize:[36,36], iconAnchor:[18,36] });
+    }
+
+    // build popup content reused
+    function buildPopupContent(s){
+      const drinksHtml = s.drinks.map(d=>`<div style="margin-top:6px"><strong>${escapeHtml(d.name)}</strong> · ${d.stockL.toFixed(2)} L · ${fmtEuro(d.pricePerL)}/L</div>`).join('');
+      return `<div style="color:#081006;font-weight:700">${escapeHtml(s.name)}</div>
+              <div class="tiny muted" style="margin-top:4px">${escapeHtml(s.address||'')}</div>
+              ${drinksHtml}
+              <div style="margin-top:8px"><button class="popup-open" data-id="${s.id}" style="padding:6px 8px;border-radius:8px;border:none;background:var(--accent-2);color:#081006;font-weight:700;cursor:pointer">Zur Station</button></div>`;
+    }
+
+    // boot sequence
+    document.addEventListener('DOMContentLoaded', ()=>{
+      wireUi();
+      renderStationList();
+      renderFavorites();
+      createTileLayers();
+      initMap();
+      startBackgroundSimulation();
+    });
+
+    // create tile layers and initialize map (split here because stations generation occurs earlier)
+    function createTileLayers(){
+      darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png', { maxZoom:19, attribution:'&copy; CartoDB, OpenStreetMap' });
+      satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19, attribution:'Tiles &copy; Esri' });
+    }
+
+    function initMap(){
+      map = L.map('map', { zoomControl:true, preferCanvas:true }).setView(CENTER, ZOOM);
+      darkLayer.addTo(map);
+      currentBase = 'dark';
+      // add markers from stations
+      stations.forEach(s=>{
+        const m = L.marker(s.coords, { icon: makeMarkerIcon('SR') }).addTo(map);
+        m.bindPopup(buildPopupContent(s), { minWidth:220 });
+        markers[s.id] = m;
+      });
+      // hook popup button clicks
+      map.on('popupopen', (e)=>{ const btn = e.popup.getElement().querySelector('.popup-open'); if(btn){ btn.addEventListener('click', ()=>{ const id = btn.getAttribute('data-id'); if(id){ selectStationById(id); centerToStation(id); } }); }});
+    }
+
+    // expose small helpers
+    window.sr_sh = { stations, saveStations, regenerate: ()=>{
+      stations = generateStationsFromCities(); saveStations(stations); // refresh markers & UI
+      // remove old markers
+      Object.values(markers).forEach(m=>map.removeLayer(m));
+      Object.keys(markers).forEach(k=>delete markers[k]);
+      stations.forEach(s=>{ const m=L.marker(s.coords,{icon:makeMarkerIcon('SR')}).addTo(map); m.bindPopup(buildPopupContent(s)); markers[s.id]=m; });
+      renderStationList(); renderFavorites();
+    } };
+  </script>
+</body>
+</html>
